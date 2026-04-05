@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Title Animation</title>
+  <link rel="stylesheet" href="https://use.typekit.net/hvi2thr.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      overflow: hidden;
+    }
+
+    body {
+      margin: 0;
+      background-color: #000;
+    }
+
+    .page-wrapper {
+      height: 200vh;
+      transform: translateY(0);
+      transition: transform 1500ms cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    .page-wrapper.scrolled {
+      transform: translateY(-100vh);
+    }
+
+    /* ── Section 1: Title ── */
+    .section-one {
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    /* ── Section 2: Black screen ── */
+    .section-two {
+      height: 100vh;
+      background-color: #000;
+    }
+
+    /* ── Reveal text ── */
+    .reveal-text {
+      font-family: "greycliff-cf", sans-serif;
+      font-weight: 900;
+      font-size: 8rem;
+      color: #fff;
+      display: flex;
+      margin: 0;
+      cursor: default;
+    }
+
+    .letter {
+      display: block;
+      overflow: hidden;
+    }
+
+    .letter > span {
+      display: block;
+      transform: translateY(100%);
+      transition-property: transform;
+      transition-duration: 1s;
+      transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    .reveal-text.slide-in .letter > span {
+      transform: translateY(0);
+    }
+
+    .letter:nth-child(1) > span { transition-delay: 0ms; }
+    .letter:nth-child(2) > span { transition-delay: 100ms; }
+    .letter:nth-child(3) > span { transition-delay: 200ms; }
+    .letter:nth-child(4) > span { transition-delay: 300ms; }
+    .letter:nth-child(5) > span { transition-delay: 400ms; }
+    .letter:nth-child(6) > span { transition-delay: 500ms; }
+    .letter:nth-child(7) > span { transition-delay: 600ms; }
+
+    /* ── Arrow morph (hover state) ── */
+    .reveal-text.arrow-morph .letter {
+      overflow: visible;
+    }
+
+    .reveal-text.arrow-morph .letter > span {
+      transition-property: transform, opacity;
+      transition-duration: 1500ms;
+      transition-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    /* Floating animation on the arrow formation */
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+
+    .reveal-text.arrow-morph.floating {
+      animation: float 2s ease-in-out infinite;
+    }
+
+    /* ── Scroll hint (subtle pulse on arrow) ── */
+    @keyframes pulse-opacity {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .reveal-text.arrow-morph.floating .letter > span {
+      animation: pulse-opacity 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-wrapper">
+    <section class="section-one">
+      <h1 class="reveal-text">
+        <span class="letter"><span>E</span></span>
+        <span class="letter"><span>M</span></span>
+        <span class="letter"><span>A</span></span>
+        <span class="letter"><span>N</span></span>
+        <span class="letter"><span>U</span></span>
+        <span class="letter"><span>E</span></span>
+        <span class="letter"><span>L</span></span>
+      </h1>
+    </section>
+
+    <section class="section-two"></section>
+  </div>
+
+  <script>
+    (function() {
+      const revealText = document.querySelector(".reveal-text");
+      const letters = document.querySelectorAll(".letter > span");
+      const pageWrapper = document.querySelector(".page-wrapper");
+      let isArrow = false;
+      let isScrolled = false;
+      let hoverTimeout = null;
+
+      // ── Initial slide-in ──
+      document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(function() {
+          revealText.classList.add("slide-in");
+        }, 500);
+      });
+
+      // ── Arrow shape offsets ──
+      // 7 letters arranged into a downward-pointing chevron / arrow:
+      //
+      //   E           L        (outer wings, high up)
+      //     M       E          (inner wings)
+      //       A   U            (near center)
+      //         N              (tip, lowest point)
+      //
+      function getArrowOffsets() {
+        const letterEls = document.querySelectorAll(".letter");
+        if (!letterEls.length) return [];
+
+        // Get bounding info for center calculation
+        const rects = Array.from(letterEls).map(el => el.getBoundingClientRect());
+        const groupLeft = rects[0].left;
+        const groupRight = rects[rects.length - 1].right;
+        const groupCenterX = (groupLeft + groupRight) / 2;
+        const groupCenterY = rects[0].top + rects[0].height / 2;
+
+        // Target arrow positions (relative to each letter's current center)
+        // Arrow tip (N, index 3) is at bottom-center; wings fan out above
+        const arrowSpreadX = 160; // horizontal spread
+        const arrowDepth = 200;   // vertical depth from wing to tip
+
+        // Desired positions relative to group center:
+        //   index:  0     1     2     3     4     5     6
+        //   char:   E     M     A     N     U     E     L
+        //   col:   -3    -2    -1     0     1     2     3
+        //   row:    0     1     2     3     2     1     0
+        const cols = [-3, -2, -1, 0, 1, 2, 3];
+        const rows = [ 0,  1,  2, 3, 2, 1, 0];
+
+        return Array.from(letterEls).map((el, i) => {
+          const rect = el.getBoundingClientRect();
+          const elCenterX = rect.left + rect.width / 2;
+          const elCenterY = rect.top + rect.height / 2;
+
+          const targetX = groupCenterX + cols[i] * (arrowSpreadX / 3);
+          const targetY = groupCenterY + rows[i] * (arrowDepth / 3);
+
+          return {
+            x: targetX - elCenterX,
+            y: targetY - elCenterY
+          };
+        });
+      }
+
+      // ── Morph to arrow ──
+      function morphToArrow() {
+        const offsets = getArrowOffsets();
+        if (!offsets.length) return;
+
+        revealText.classList.add("arrow-morph");
+
+        letters.forEach((span, i) => {
+          span.style.transitionProperty = "transform, opacity";
+          span.style.transitionDuration = "1500ms";
+          span.style.transitionTimingFunction = "cubic-bezier(0.42, 0, 0.58, 1)";
+          span.style.transform = `translate(${offsets[i].x}px, ${offsets[i].y}px)`;
+        });
+
+        // Start floating after morph completes
+        clearTimeout(hoverTimeout);
+        hoverTimeout = setTimeout(function() {
+          revealText.classList.add("floating");
+        }, 1500);
+
+        isArrow = true;
+      }
+
+      // ── Morph back to text ──
+      function morphToText() {
+        revealText.classList.remove("floating");
+        revealText.classList.remove("arrow-morph");
+
+        letters.forEach((span) => {
+          span.style.transitionProperty = "transform, opacity";
+          span.style.transitionDuration = "1500ms";
+          span.style.transitionTimingFunction = "cubic-bezier(0.42, 0, 0.58, 1)";
+          span.style.transform = "translateY(0)";
+        });
+
+        clearTimeout(hoverTimeout);
+        isArrow = false;
+      }
+
+      // ── Hover events ──
+      revealText.addEventListener("mouseenter", function() {
+        if (!isScrolled) morphToArrow();
+      });
+
+      revealText.addEventListener("mouseleave", function() {
+        if (!isScrolled) morphToText();
+      });
+
+      // ── Scroll to section two ──
+      function scrollToSection() {
+        if (isScrolled) return;
+        isScrolled = true;
+        revealText.classList.remove("floating");
+        pageWrapper.classList.add("scrolled");
+      }
+
+      function scrollToTop() {
+        if (!isScrolled) return;
+        isScrolled = false;
+        pageWrapper.classList.remove("scrolled");
+      }
+
+      // Listen for wheel / touch to trigger the section transition
+      window.addEventListener("wheel", function(e) {
+        if (e.deltaY > 0 && !isScrolled) {
+          scrollToSection();
+        } else if (e.deltaY < 0 && isScrolled) {
+          scrollToTop();
+        }
+      }, { passive: true });
+
+      // Touch support
+      let touchStartY = 0;
+      window.addEventListener("touchstart", function(e) {
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      window.addEventListener("touchend", function(e) {
+        const deltaY = touchStartY - e.changedTouches[0].clientY;
+        if (deltaY > 50 && !isScrolled) {
+          scrollToSection();
+        } else if (deltaY < -50 && isScrolled) {
+          scrollToTop();
+        }
+      }, { passive: true });
+
+      // Keyboard support (arrow down / space / page down)
+      window.addEventListener("keydown", function(e) {
+        if ((e.key === "ArrowDown" || e.key === " " || e.key === "PageDown") && !isScrolled) {
+          e.preventDefault();
+          scrollToSection();
+        } else if ((e.key === "ArrowUp" || e.key === "PageUp") && isScrolled) {
+          e.preventDefault();
+          scrollToTop();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
