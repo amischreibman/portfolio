@@ -96,7 +96,7 @@
     }
     .reveal-text.resetting .arrow-enter {
       transition: none !important;
-      transform: translateY(-150%) !important;
+      transform: translateY(-110%) !important;
       opacity: 0 !important;
     }
     .reveal-text.resetting .arrow-float {
@@ -123,7 +123,9 @@
       pointer-events: none;
     }
 
-    /* Outer wrapper: handles the soft entry from above */
+    /* Outer wrapper: slides the entire arrow panel in from above the mask.
+       The mask has overflow:hidden, so the arrow is invisible until it
+       enters the clipped area. */
     .arrow-enter {
       position: absolute;
       top: 0;
@@ -131,18 +133,19 @@
       width: 100%;
       height: 100%;
       opacity: 0;
-      transform: translateY(-150%);
+      transform: translateY(-110%);
     }
 
-    /* Inner wrapper: runs the float loop continuously from the start.
-       As the parent slides in, the float is already in motion,
-       so the deceleration of entry blends seamlessly into the bob. */
+    /* Inner wrapper: holds the SVG centered inside the mask area.
+       Runs the float bob continuously so the entry decelerates
+       seamlessly into the hovering motion. The bob range is small
+       enough to keep the arrow fully inside the rectangle. */
     .arrow-float {
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 50px;
-      height: 50px;
+      width: 44px;
+      height: 44px;
       transform: translate(-50%, -50%);
     }
 
@@ -155,17 +158,18 @@
     .reveal-text.ready:hover .letter:nth-child(6) > span { transform: translateX(-1.4em); }
     .reveal-text.ready:hover .letter:nth-child(7) > span { transform: translateX(-1.95em); }
 
-    /* Entry: arrow slides in softly from above with a long deceleration */
+    /* Entry: slides down from above the mask into view.
+       The mask clips everything outside the letter bounds,
+       so the arrow appears to slide in from the top edge. */
     .reveal-text.ready:hover .arrow-enter {
       opacity: 1;
       transform: translateY(0);
-      transition: transform 1600ms cubic-bezier(0.16, 1, 0.3, 1) 100ms,
-                  opacity 400ms ease 100ms;
+      transition: transform 1600ms cubic-bezier(0.16, 1, 0.3, 1) 200ms,
+                  opacity 300ms ease 200ms;
     }
 
-    /* Float: always running so it's already in motion as the entry lands.
-       The gentle bob is visible from the moment the parent becomes opaque,
-       creating a seamless blend from slide-in to hover-float. */
+    /* Float: runs continuously so it blends with the entry.
+       Range is constrained (±8% of center) to stay inside the mask. */
     .reveal-text.ready:hover .arrow-float {
       animation: floatBob 2.4s ease-in-out infinite;
     }
