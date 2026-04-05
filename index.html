@@ -94,53 +94,30 @@
       transition: none !important;
       transform: translateY(100%) !important;
     }
-    .reveal-text.resetting .arrow-enter {
-      transition: none !important;
-      transform: translateY(-110%) !important;
-      opacity: 0 !important;
-    }
-    .reveal-text.resetting .arrow-float {
-      animation: none !important;
-    }
 
-    .center-letter {
-      z-index: 10;
-    }
-
-    .center-letter > span {
-      position: relative;
-      display: inline-block;
-    }
-
-    .arrow-mask {
+    /* ── Arrow overlay: sits on top of ALL letters ── */
+    .arrow-overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 50px;    /* match .reveal-text padding */
+      left: 50%;
+      transform: translateX(-50%);
       overflow: hidden;
-      z-index: 10;
+      z-index: 100;
       pointer-events: none;
+      /* sized by JS to match the center letter dimensions */
     }
 
-    /* Outer wrapper: slides the entire arrow panel in from above the mask.
-       The mask has overflow:hidden, so the arrow is invisible until it
-       enters the clipped area. */
-    .arrow-enter {
+    .arrow-slider {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      opacity: 0;
       transform: translateY(-110%);
+      transition: transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Inner wrapper: holds the SVG centered inside the mask area.
-       Runs the float bob continuously so the entry decelerates
-       seamlessly into the hovering motion. The bob range is small
-       enough to keep the arrow fully inside the rectangle. */
-    .arrow-float {
+    .arrow-svg-wrap {
       position: absolute;
       top: 50%;
       left: 50%;
@@ -149,7 +126,31 @@
       transform: translate(-50%, -50%);
     }
 
-    /* HOVER EFFECTS */
+    .arrow-svg-wrap svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    @keyframes floatBob {
+      0%, 100% { transform: translate(-50%, -58%); }
+      50%      { transform: translate(-50%, -42%); }
+    }
+
+    .arrow-svg-wrap.floating {
+      animation: floatBob 2.2s ease-in-out infinite;
+    }
+
+    /* Reset state */
+    .reveal-text.resetting .arrow-slider {
+      transition: none !important;
+      transform: translateY(-110%) !important;
+    }
+    .reveal-text.resetting .arrow-svg-wrap {
+      animation: none !important;
+    }
+
+    /* HOVER: letters converge */
     .reveal-text.ready:hover .letter:nth-child(1) > span { transform: translateX(2.2em); }
     .reveal-text.ready:hover .letter:nth-child(2) > span { transform: translateX(1.5em); }
     .reveal-text.ready:hover .letter:nth-child(3) > span { transform: translateX(0.7em); }
@@ -157,27 +158,6 @@
     .reveal-text.ready:hover .letter:nth-child(5) > span { transform: translateX(-0.7em) scale(0.8); }
     .reveal-text.ready:hover .letter:nth-child(6) > span { transform: translateX(-1.4em); }
     .reveal-text.ready:hover .letter:nth-child(7) > span { transform: translateX(-1.95em); }
-
-    /* Entry: slides down from above the mask into view.
-       The mask clips everything outside the letter bounds,
-       so the arrow appears to slide in from the top edge. */
-    .reveal-text.ready:hover .arrow-enter {
-      opacity: 1;
-      transform: translateY(0);
-      transition: transform 1600ms cubic-bezier(0.16, 1, 0.3, 1) 200ms,
-                  opacity 300ms ease 200ms;
-    }
-
-    /* Float: runs continuously so it blends with the entry.
-       Range is constrained (±8% of center) to stay inside the mask. */
-    .reveal-text.ready:hover .arrow-float {
-      animation: floatBob 2.4s ease-in-out infinite;
-    }
-
-    @keyframes floatBob {
-      0%, 100% { transform: translate(-50%, -58%); }
-      50%      { transform: translate(-50%, -42%); }
-    }
   </style>
 </head>
 <body>
@@ -187,23 +167,21 @@
         <span class="letter"><span>E</span></span>
         <span class="letter"><span>M</span></span>
         <span class="letter"><span>A</span></span>
-        <span class="letter center-letter">
-          <span>
-            N
-            <div class="arrow-mask">
-              <div class="arrow-enter">
-                <div class="arrow-float">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 16 18 9"></polyline>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </span>
-        </span>
+        <span class="letter"><span>N</span></span>
         <span class="letter"><span>U</span></span>
         <span class="letter"><span>E</span></span>
         <span class="letter"><span>L</span></span>
+
+        <!-- Arrow: separate overlay on top of everything -->
+        <div class="arrow-overlay">
+          <div class="arrow-slider">
+            <div class="arrow-svg-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 16 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+        </div>
       </h1>
     </section>
     <section class="section-2"></section>
@@ -211,9 +189,76 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", function() {
-      const text = document.querySelector(".reveal-text");
-      const scrollContainer = document.getElementById("scrollContainer");
+      var text = document.querySelector(".reveal-text");
+      var scrollContainer = document.getElementById("scrollContainer");
+      var arrowOverlay = document.querySelector(".arrow-overlay");
+      var arrowSlider = document.querySelector(".arrow-slider");
+      var arrowSvgWrap = document.querySelector(".arrow-svg-wrap");
+      var centerLetter = document.querySelectorAll(".letter")[3]; // "N"
 
+      var hoverActive = false;
+      var arrowEnterTimer = null;
+      var floatTimer = null;
+
+      // Letter centering animation duration (from CSS)
+      var LETTER_DURATION = 600;
+      // Arrow enters 300ms before that animation ends
+      var ARROW_DELAY = LETTER_DURATION - 300; // 300ms
+
+      // ── Size the arrow overlay to match the center letter ──
+      function sizeOverlay() {
+        var rect = centerLetter.getBoundingClientRect();
+        var parentRect = text.getBoundingClientRect();
+        arrowOverlay.style.width = rect.width + "px";
+        arrowOverlay.style.height = rect.height + "px";
+        // position relative to .reveal-text
+        arrowOverlay.style.left = (rect.left - parentRect.left) + "px";
+        arrowOverlay.style.top = (rect.top - parentRect.top) + "px";
+        arrowOverlay.style.transform = "none";
+      }
+
+      // ── Show arrow: slide in from top, then float ──
+      function showArrow() {
+        sizeOverlay();
+        arrowSlider.style.transition = "transform 1200ms cubic-bezier(0.16, 1, 0.3, 1)";
+        arrowSlider.style.transform = "translateY(0)";
+
+        // Start floating once entry is mostly done
+        clearTimeout(floatTimer);
+        floatTimer = setTimeout(function() {
+          if (hoverActive) {
+            arrowSvgWrap.classList.add("floating");
+          }
+        }, 800);
+      }
+
+      // ── Hide arrow: slide back up, stop floating ──
+      function hideArrow() {
+        clearTimeout(arrowEnterTimer);
+        clearTimeout(floatTimer);
+        arrowSvgWrap.classList.remove("floating");
+        arrowSlider.style.transition = "transform 500ms cubic-bezier(0.9, 0, 0.1, 1)";
+        arrowSlider.style.transform = "translateY(-110%)";
+      }
+
+      // ── Hover events ──
+      text.addEventListener("mouseenter", function() {
+        if (!text.classList.contains("ready")) return;
+        hoverActive = true;
+
+        // Arrow enters 300ms before the 600ms letter animation ends
+        clearTimeout(arrowEnterTimer);
+        arrowEnterTimer = setTimeout(function() {
+          if (hoverActive) showArrow();
+        }, ARROW_DELAY);
+      });
+
+      text.addEventListener("mouseleave", function() {
+        hoverActive = false;
+        hideArrow();
+      });
+
+      // ── Intro animation ──
       function playIntro(delayBeforeStart) {
         delayBeforeStart = delayBeforeStart || 500;
         text.classList.add("resetting");
@@ -226,18 +271,22 @@
           text.classList.add("slide-in");
           setTimeout(function() {
             text.classList.add("ready");
+            sizeOverlay();
           }, 1600);
         }, delayBeforeStart);
       }
 
       playIntro();
 
+      // ── Scroll ──
       var hasScrolled = false;
       var resetTimeout;
 
       function handleScrollDown() {
         if (!hasScrolled) {
           hasScrolled = true;
+          hoverActive = false;
+          hideArrow();
           scrollContainer.classList.add("scrolled");
 
           resetTimeout = setTimeout(function() {
