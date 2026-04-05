@@ -5,76 +5,64 @@
   <title>Title Animation</title>
   <link rel="stylesheet" href="https://use.typekit.net/hvi2thr.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html {
-      overflow: hidden;
-    }
-
     body {
       margin: 0;
+      overflow: hidden;
       background-color: #000;
+      font-family: "greycliff-cf", sans-serif;
     }
 
-    .page-wrapper {
+    .scroll-container {
       height: 200vh;
+      width: 100vw;
       transform: translateY(0);
-      transition: transform 1500ms cubic-bezier(0.85, 0, 0.15, 1);
+      transition: transform 200ms cubic-bezier(0.9, 0, 0.1, 1);
+      display: flex;
+      flex-direction: column;
     }
 
-    .page-wrapper.scrolled {
+    .scroll-container.scrolled {
       transform: translateY(-100vh);
+      transition: transform 1500ms cubic-bezier(0.9, 0, 0.1, 1);
     }
 
-    /* ── Section 1: Title ── */
-    .section-one {
+    section {
       height: 100vh;
+      width: 100%;
       display: flex;
       justify-content: center;
       align-items: center;
-      position: relative;
+      flex-shrink: 0;
     }
 
-    /* ── Section 2: Black screen ── */
-    .section-two {
-      height: 100vh;
+    .section-1, .section-2 {
       background-color: #000;
     }
 
-    /* ── Hover container ── */
-    .hover-zone {
-      position: relative;
-      cursor: default;
-    }
-
-    /* ── Reveal text ── */
     .reveal-text {
-      font-family: "greycliff-cf", sans-serif;
+      position: relative;
       font-weight: 900;
       font-size: 8rem;
       color: #fff;
       display: flex;
       margin: 0;
-      position: relative;
-      z-index: 1;
+      padding: 50px;
+      cursor: pointer;
     }
 
     .letter {
+      position: relative;
       display: block;
       overflow: hidden;
-      position: relative;
+      z-index: 1;
     }
 
     .letter > span {
       display: block;
       transform: translateY(100%);
-      transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1);
-      -webkit-text-stroke: 0px #fff;
-      paint-order: stroke fill;
+      transition-property: transform;
+      transition-duration: 1s;
+      transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
     }
 
     .reveal-text.slide-in .letter > span {
@@ -89,216 +77,205 @@
     .letter:nth-child(6) > span { transition-delay: 500ms; }
     .letter:nth-child(7) > span { transition-delay: 600ms; }
 
-    /* ── Arrow icon (black, floats on top of letters) ── */
-    .arrow-icon {
+    .reveal-text.ready .letter {
+      overflow: visible;
+    }
+
+    .reveal-text.ready .letter > span {
+      transition: transform 600ms cubic-bezier(0.9, 0, 0.1, 1) !important;
+      transition-delay: 0ms !important;
+      transform-origin: center;
+    }
+
+    .reveal-text.resetting .letter {
+      overflow: hidden !important;
+    }
+    .reveal-text.resetting .letter > span {
+      transition: none !important;
+      transform: translateY(100%) !important;
+    }
+    .reveal-text.resetting .arrow-enter {
+      transition: none !important;
+      transform: translateY(-150%) !important;
+      opacity: 0 !important;
+    }
+    .reveal-text.resetting .arrow-float {
+      animation: none !important;
+    }
+
+    .center-letter {
+      z-index: 10;
+    }
+
+    .center-letter > span {
+      position: relative;
+      display: inline-block;
+    }
+
+    .arrow-mask {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* Outer wrapper: handles the soft entry from above */
+    .arrow-enter {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      transform: translateY(-150%);
+    }
+
+    /* Inner wrapper: runs the float loop continuously from the start.
+       As the parent slides in, the float is already in motion,
+       so the deceleration of entry blends seamlessly into the bob. */
+    .arrow-float {
       position: absolute;
       top: 50%;
       left: 50%;
+      width: 50px;
+      height: 50px;
       transform: translate(-50%, -50%);
-      z-index: 10;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 500ms cubic-bezier(0.85, 0, 0.15, 1);
     }
 
-    .arrow-icon svg {
-      display: block;
+    /* HOVER EFFECTS */
+    .reveal-text.ready:hover .letter:nth-child(1) > span { transform: translateX(2.2em); }
+    .reveal-text.ready:hover .letter:nth-child(2) > span { transform: translateX(1.5em); }
+    .reveal-text.ready:hover .letter:nth-child(3) > span { transform: translateX(0.7em); }
+    .reveal-text.ready:hover .letter:nth-child(4) > span { transform: translateX(0); }
+    .reveal-text.ready:hover .letter:nth-child(5) > span { transform: translateX(-0.7em) scale(0.8); }
+    .reveal-text.ready:hover .letter:nth-child(6) > span { transform: translateX(-1.4em); }
+    .reveal-text.ready:hover .letter:nth-child(7) > span { transform: translateX(-1.95em); }
+
+    /* Entry: arrow slides in softly from above with a long deceleration */
+    .reveal-text.ready:hover .arrow-enter {
+      opacity: 1;
+      transform: translateY(0);
+      transition: transform 1600ms cubic-bezier(0.16, 1, 0.3, 1) 100ms,
+                  opacity 400ms ease 100ms;
     }
 
-    /* ── Floating bounce with max ease-in-out ── */
-    @keyframes bounce-float {
-      0%   { transform: translate(-50%, -50%) translateY(-8px); }
-      50%  { transform: translate(-50%, -50%) translateY(8px); }
-      100% { transform: translate(-50%, -50%) translateY(-8px); }
+    /* Float: always running so it's already in motion as the entry lands.
+       The gentle bob is visible from the moment the parent becomes opaque,
+       creating a seamless blend from slide-in to hover-float. */
+    .reveal-text.ready:hover .arrow-float {
+      animation: floatBob 2.4s ease-in-out infinite;
     }
 
-    .arrow-icon.floating {
-      animation: bounce-float 1.8s cubic-bezier(0.85, 0, 0.15, 1) infinite;
+    @keyframes floatBob {
+      0%, 100% { transform: translate(-50%, -58%); }
+      50%      { transform: translate(-50%, -42%); }
     }
   </style>
 </head>
 <body>
-
-  <div class="page-wrapper">
-    <section class="section-one">
-      <div class="hover-zone">
-        <h1 class="reveal-text">
-          <span class="letter"><span>E</span></span>
-          <span class="letter"><span>M</span></span>
-          <span class="letter"><span>A</span></span>
-          <span class="letter"><span>N</span></span>
-          <span class="letter"><span>U</span></span>
-          <span class="letter"><span>E</span></span>
-          <span class="letter"><span>L</span></span>
-        </h1>
-        <div class="arrow-icon">
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 5 L12 17" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
-            <path d="M6 13 L12 19 L18 13" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
+  <div class="scroll-container" id="scrollContainer">
+    <section class="section-1">
+      <h1 class="reveal-text">
+        <span class="letter"><span>E</span></span>
+        <span class="letter"><span>M</span></span>
+        <span class="letter"><span>A</span></span>
+        <span class="letter center-letter">
+          <span>
+            N
+            <div class="arrow-mask">
+              <div class="arrow-enter">
+                <div class="arrow-float">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 16 18 9"></polyline>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </span>
+        </span>
+        <span class="letter"><span>U</span></span>
+        <span class="letter"><span>E</span></span>
+        <span class="letter"><span>L</span></span>
+      </h1>
     </section>
-
-    <section class="section-two"></section>
+    <section class="section-2"></section>
   </div>
 
   <script>
-    (function() {
-      var hoverZone = document.querySelector(".hover-zone");
-      var revealText = document.querySelector(".reveal-text");
-      var letterWrappers = document.querySelectorAll(".letter");
-      var letterSpans = document.querySelectorAll(".letter > span");
-      var arrowIcon = document.querySelector(".arrow-icon");
-      var pageWrapper = document.querySelector(".page-wrapper");
+    document.addEventListener("DOMContentLoaded", function() {
+      const text = document.querySelector(".reveal-text");
+      const scrollContainer = document.getElementById("scrollContainer");
 
-      var isMorphed = false;
-      var isScrolled = false;
-      var arrowTimeout = null;
+      function playIntro(delayBeforeStart) {
+        delayBeforeStart = delayBeforeStart || 500;
+        text.classList.add("resetting");
+        text.classList.remove("slide-in", "ready");
 
-      var EASE = "cubic-bezier(0.85, 0, 0.15, 1)";
+        void text.offsetWidth;
+        text.classList.remove("resetting");
 
-      // ── Initial slide-in ──
-      setTimeout(function() {
-        revealText.classList.add("slide-in");
-      }, 500);
-
-      // ── Compute X offset for each letter to reach group center ──
-      function getCenterOffsets() {
-        var rects = Array.from(letterWrappers).map(function(el) {
-          return el.getBoundingClientRect();
-        });
-        var groupLeft = rects[0].left;
-        var groupRight = rects[rects.length - 1].right;
-        var groupCenterX = (groupLeft + groupRight) / 2;
-
-        return rects.map(function(rect) {
-          var elCenterX = rect.left + rect.width / 2;
-          return groupCenterX - elCenterX;
-        });
-      }
-
-      // ── Hover in: letters converge on X + max weight, arrow floats on top ──
-      function morphToSquare() {
-        if (isMorphed) return;
-        isMorphed = true;
-
-        var offsets = getCenterOffsets();
-
-        // Allow letters to overlap
-        letterWrappers.forEach(function(el) {
-          el.style.overflow = "visible";
-        });
-
-        // Move each letter to center on X axis only + max out stroke weight
-        letterSpans.forEach(function(span, i) {
-          span.style.transition =
-            "transform 1500ms " + EASE + ", " +
-            "-webkit-text-stroke 1500ms " + EASE;
-          span.style.transitionDelay = "0ms";
-          span.style.transform = "translateX(" + offsets[i] + "px)";
-          span.style.webkitTextStroke = "20px #fff";
-        });
-
-        // Show floating arrow after letters have converged
-        clearTimeout(arrowTimeout);
-        arrowTimeout = setTimeout(function() {
-          if (!isMorphed) return;
-          arrowIcon.style.transition = "opacity 500ms " + EASE;
-          arrowIcon.style.opacity = "1";
-          setTimeout(function() {
-            if (!isMorphed) return;
-            arrowIcon.classList.add("floating");
-          }, 300);
-        }, 1300);
-      }
-
-      // ── Hover out: reverse everything ──
-      function morphToText() {
-        if (!isMorphed) return;
-        isMorphed = false;
-        clearTimeout(arrowTimeout);
-
-        // Hide arrow
-        arrowIcon.classList.remove("floating");
-        arrowIcon.style.transition = "opacity 300ms " + EASE;
-        arrowIcon.style.opacity = "0";
-
-        // Letters return to original positions + normal weight
-        letterSpans.forEach(function(span) {
-          span.style.transition =
-            "transform 1500ms " + EASE + ", " +
-            "-webkit-text-stroke 1500ms " + EASE;
-          span.style.transitionDelay = "0ms";
-          span.style.transform = "translateY(0)";
-          span.style.webkitTextStroke = "0px #fff";
-        });
-
-        // Restore overflow after animation
         setTimeout(function() {
-          if (!isMorphed) {
-            letterWrappers.forEach(function(el) {
-              el.style.overflow = "hidden";
-            });
-          }
-        }, 1600);
+          text.classList.add("slide-in");
+          setTimeout(function() {
+            text.classList.add("ready");
+          }, 1600);
+        }, delayBeforeStart);
       }
 
-      // ── Hover events ──
-      hoverZone.addEventListener("mouseenter", function() {
-        if (!isScrolled) morphToSquare();
-      });
+      playIntro();
 
-      hoverZone.addEventListener("mouseleave", function() {
-        if (!isScrolled) morphToText();
-      });
+      var hasScrolled = false;
+      var resetTimeout;
 
-      // ── Scroll to section two ──
-      function scrollToSection() {
-        if (isScrolled) return;
-        isScrolled = true;
-        arrowIcon.classList.remove("floating");
-        pageWrapper.classList.add("scrolled");
+      function handleScrollDown() {
+        if (!hasScrolled) {
+          hasScrolled = true;
+          scrollContainer.classList.add("scrolled");
+
+          resetTimeout = setTimeout(function() {
+            if (hasScrolled) {
+              text.classList.add("resetting");
+              text.classList.remove("slide-in", "ready");
+            }
+          }, 1500);
+        }
       }
 
-      function scrollToTop() {
-        if (!isScrolled) return;
-        isScrolled = false;
-        pageWrapper.classList.remove("scrolled");
+      function handleScrollUp() {
+        if (hasScrolled) {
+          hasScrolled = false;
+          scrollContainer.classList.remove("scrolled");
+          clearTimeout(resetTimeout);
+
+          text.classList.add("resetting");
+          text.classList.remove("slide-in", "ready");
+          void text.offsetWidth;
+
+          setTimeout(function() {
+            playIntro(300);
+          }, 200);
+        }
       }
 
       window.addEventListener("wheel", function(e) {
-        if (e.deltaY > 0 && !isScrolled) {
-          scrollToSection();
-        } else if (e.deltaY < 0 && isScrolled) {
-          scrollToTop();
-        }
-      }, { passive: true });
+        if (e.deltaY > 0) handleScrollDown();
+        else if (e.deltaY < 0) handleScrollUp();
+      });
 
       var touchStartY = 0;
       window.addEventListener("touchstart", function(e) {
         touchStartY = e.touches[0].clientY;
-      }, { passive: true });
-
-      window.addEventListener("touchend", function(e) {
-        var deltaY = touchStartY - e.changedTouches[0].clientY;
-        if (deltaY > 50 && !isScrolled) {
-          scrollToSection();
-        } else if (deltaY < -50 && isScrolled) {
-          scrollToTop();
-        }
-      }, { passive: true });
-
-      window.addEventListener("keydown", function(e) {
-        if ((e.key === "ArrowDown" || e.key === " " || e.key === "PageDown") && !isScrolled) {
-          e.preventDefault();
-          scrollToSection();
-        } else if ((e.key === "ArrowUp" || e.key === "PageUp") && isScrolled) {
-          e.preventDefault();
-          scrollToTop();
-        }
       });
-    })();
+      window.addEventListener("touchmove", function(e) {
+        var touchEndY = e.touches[0].clientY;
+        if (touchStartY - touchEndY > 50) handleScrollDown();
+        else if (touchEndY - touchStartY > 50) handleScrollUp();
+      });
+    });
   </script>
 </body>
 </html>
