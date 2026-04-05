@@ -23,7 +23,7 @@
     .page-wrapper {
       height: 200vh;
       transform: translateY(0);
-      transition: transform 1500ms cubic-bezier(0.42, 0, 0.58, 1);
+      transition: transform 1500ms cubic-bezier(0.85, 0, 0.15, 1);
     }
 
     .page-wrapper.scrolled {
@@ -66,13 +66,13 @@
     .letter {
       display: block;
       overflow: hidden;
+      position: relative;
     }
 
     .letter > span {
       display: block;
       transform: translateY(100%);
-      transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1),
-                  opacity 1s cubic-bezier(0.19, 1, 0.22, 1);
+      transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1);
     }
 
     .reveal-text.slide-in .letter > span {
@@ -87,24 +87,21 @@
     .letter:nth-child(6) > span { transition-delay: 500ms; }
     .letter:nth-child(7) > span { transition-delay: 600ms; }
 
-    /* ── White rectangle (appears on hover) ── */
-    .rect-bg {
+    /* ── White square that solidifies behind converging letters ── */
+    .square-bg {
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 0;
-      height: 0;
+      transform: translate(-50%, -50%) scale(0.3);
       background: #fff;
-      border-radius: 8px;
-      transform: translate(-50%, -50%);
-      transition: width 1500ms cubic-bezier(0.42, 0, 0.58, 1),
-                  height 1500ms cubic-bezier(0.42, 0, 0.58, 1),
-                  opacity 1500ms cubic-bezier(0.42, 0, 0.58, 1);
+      border-radius: 6px;
       opacity: 0;
       z-index: 1;
+      transition: transform 1500ms cubic-bezier(0.85, 0, 0.15, 1),
+                  opacity 1500ms cubic-bezier(0.85, 0, 0.15, 1);
     }
 
-    /* ── Arrow icon (dark, inside the rectangle) ── */
+    /* ── Arrow icon (dark, inside the square) ── */
     .arrow-icon {
       position: absolute;
       top: 50%;
@@ -112,7 +109,7 @@
       transform: translate(-50%, -50%);
       z-index: 3;
       opacity: 0;
-      transition: opacity 600ms cubic-bezier(0.42, 0, 0.58, 1);
+      transition: opacity 500ms cubic-bezier(0.85, 0, 0.15, 1);
       pointer-events: none;
     }
 
@@ -120,14 +117,15 @@
       display: block;
     }
 
-    /* ── Floating animation ── */
-    @keyframes float-arrow {
-      0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-      50% { transform: translate(-50%, -50%) translateY(10px); }
+    /* ── Floating bounce with max ease-in-out ── */
+    @keyframes bounce-float {
+      0%   { transform: translate(-50%, -50%) translateY(-6px); }
+      50%  { transform: translate(-50%, -50%) translateY(6px); }
+      100% { transform: translate(-50%, -50%) translateY(-6px); }
     }
 
     .arrow-icon.floating {
-      animation: float-arrow 1.6s ease-in-out infinite;
+      animation: bounce-float 1.8s cubic-bezier(0.85, 0, 0.15, 1) infinite;
     }
   </style>
 </head>
@@ -145,10 +143,11 @@
           <span class="letter"><span>E</span></span>
           <span class="letter"><span>L</span></span>
         </h1>
-        <div class="rect-bg"></div>
+        <div class="square-bg"></div>
         <div class="arrow-icon">
-          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 4 L12 18 M5 13 L12 20 L19 13" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5 L12 17" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M6 13 L12 19 L18 13" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
       </div>
@@ -159,106 +158,149 @@
 
   <script>
     (function() {
-      const hoverZone = document.querySelector(".hover-zone");
-      const revealText = document.querySelector(".reveal-text");
-      const letterEls = document.querySelectorAll(".letter");
-      const letterSpans = document.querySelectorAll(".letter > span");
-      const rectBg = document.querySelector(".rect-bg");
-      const arrowIcon = document.querySelector(".arrow-icon");
-      const pageWrapper = document.querySelector(".page-wrapper");
+      var hoverZone = document.querySelector(".hover-zone");
+      var revealText = document.querySelector(".reveal-text");
+      var letterWrappers = document.querySelectorAll(".letter");
+      var letterSpans = document.querySelectorAll(".letter > span");
+      var squareBg = document.querySelector(".square-bg");
+      var arrowIcon = document.querySelector(".arrow-icon");
+      var pageWrapper = document.querySelector(".page-wrapper");
 
-      let isMorphed = false;
-      let isScrolled = false;
-      let morphTimeout = null;
-      let arrowTimeout = null;
+      var isMorphed = false;
+      var isScrolled = false;
+      var arrowTimeout = null;
+      var floatTimeout = null;
+
+      // Max ease-in-out curve
+      var EASE = "cubic-bezier(0.85, 0, 0.15, 1)";
 
       // ── Initial slide-in ──
       setTimeout(function() {
         revealText.classList.add("slide-in");
       }, 500);
 
-      // ── Compute center offsets for each letter ──
+      // ── Compute how far each letter must translateX to reach the group center ──
       function getCenterOffsets() {
-        const rects = Array.from(letterEls).map(el => el.getBoundingClientRect());
-        const groupLeft = rects[0].left;
-        const groupRight = rects[rects.length - 1].right;
-        const groupCenterX = (groupLeft + groupRight) / 2;
+        var rects = Array.from(letterWrappers).map(function(el) {
+          return el.getBoundingClientRect();
+        });
+        var groupLeft = rects[0].left;
+        var groupRight = rects[rects.length - 1].right;
+        var groupCenterX = (groupLeft + groupRight) / 2;
 
-        return rects.map(rect => {
-          const elCenterX = rect.left + rect.width / 2;
+        return rects.map(function(rect) {
+          var elCenterX = rect.left + rect.width / 2;
           return groupCenterX - elCenterX;
         });
       }
 
-      // ── Morph: letters collapse to center → white rectangle → dark arrow ──
-      function morphToRect() {
+      // ── Morph: letters converge to center → overlap into white square → arrow appears ──
+      function morphToSquare() {
         if (isMorphed) return;
         isMorphed = true;
 
-        const offsets = getCenterOffsets();
+        var offsets = getCenterOffsets();
 
-        // Get the text bounding box for rectangle sizing
-        const textRect = revealText.getBoundingClientRect();
-        const rectWidth = textRect.height * 1.1;  // square-ish rectangle
-        const rectHeight = textRect.height * 1.1;
+        // Measure the text height to size the square
+        var textRect = revealText.getBoundingClientRect();
+        var squareSize = textRect.height * 1.15;
 
-        // Phase 1: Collapse letters to center and fade them out
-        letterSpans.forEach((span, i) => {
-          span.style.transition = "transform 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 1200ms cubic-bezier(0.42, 0, 0.58, 1)";
-          span.style.transitionDelay = "0ms";
-          span.style.transform = `translateX(${offsets[i]}px) scale(0.5)`;
-          span.style.opacity = "0";
+        // Set square dimensions (it will scale in)
+        squareBg.style.width = squareSize + "px";
+        squareBg.style.height = squareSize + "px";
+
+        // Allow letters to visibly overlap (remove overflow clipping)
+        letterWrappers.forEach(function(el) {
+          el.style.overflow = "visible";
         });
 
-        // Phase 1: Grow the white rectangle
-        rectBg.style.transition = "width 1500ms cubic-bezier(0.42, 0, 0.58, 1), height 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 800ms cubic-bezier(0.42, 0, 0.58, 1)";
-        rectBg.style.width = rectWidth + "px";
-        rectBg.style.height = rectHeight + "px";
-        rectBg.style.opacity = "1";
+        // Phase 1: Letters converge toward center over 1500ms
+        // Each letter translates horizontally to the center point and scales up slightly
+        // so they overlap and fill space, creating a solid white mass
+        letterSpans.forEach(function(span, i) {
+          span.style.transition =
+            "transform 1500ms " + EASE + ", " +
+            "opacity 1500ms " + EASE;
+          span.style.transitionDelay = "0ms";
+          span.style.transform = "translateX(" + offsets[i] + "px) scaleX(2.5) scaleY(1.1)";
+          span.style.opacity = "1";
+        });
 
-        // Phase 2: After rectangle forms, show the dark arrow and start floating
+        // Phase 1b: White square scales up behind the converging letters
+        // Starts slightly delayed so the letters lead the motion
+        squareBg.style.transition =
+          "transform 1500ms " + EASE + ", " +
+          "opacity 1000ms " + EASE + " 400ms";
+        squareBg.style.transform = "translate(-50%, -50%) scale(1)";
+        squareBg.style.opacity = "1";
+
+        // Phase 2: Once square is formed, fade letters out (they're white-on-white now)
+        // and reveal the dark arrow
         clearTimeout(arrowTimeout);
+        clearTimeout(floatTimeout);
+
         arrowTimeout = setTimeout(function() {
           if (!isMorphed) return;
-          arrowIcon.style.transition = "opacity 600ms cubic-bezier(0.42, 0, 0.58, 1)";
+
+          // Hide letters (now behind the square)
+          letterSpans.forEach(function(span) {
+            span.style.transition = "opacity 300ms " + EASE;
+            span.style.opacity = "0";
+          });
+
+          // Show arrow
+          arrowIcon.style.transition = "opacity 500ms " + EASE;
           arrowIcon.style.opacity = "1";
 
-          // Start floating after fade-in
-          setTimeout(function() {
+          floatTimeout = setTimeout(function() {
             if (!isMorphed) return;
             arrowIcon.classList.add("floating");
-          }, 300);
-        }, 1200);
+          }, 400);
+        }, 1300);
       }
 
-      // ── Reverse: arrow fades → rectangle shrinks → letters return ──
+      // ── Reverse: arrow hides → square shrinks → letters spread back ──
       function morphToText() {
         if (!isMorphed) return;
         isMorphed = false;
         clearTimeout(arrowTimeout);
+        clearTimeout(floatTimeout);
 
-        // Immediately stop floating and hide arrow
+        // Stop floating, hide arrow immediately
         arrowIcon.classList.remove("floating");
-        arrowIcon.style.transition = "opacity 400ms cubic-bezier(0.42, 0, 0.58, 1)";
+        arrowIcon.style.transition = "opacity 300ms " + EASE;
         arrowIcon.style.opacity = "0";
 
-        // Shrink rectangle
-        rectBg.style.transition = "width 1500ms cubic-bezier(0.42, 0, 0.58, 1), height 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 1500ms cubic-bezier(0.42, 0, 0.58, 1)";
-        rectBg.style.width = "0";
-        rectBg.style.height = "0";
-        rectBg.style.opacity = "0";
+        // Shrink square back down
+        squareBg.style.transition =
+          "transform 1500ms " + EASE + ", " +
+          "opacity 800ms " + EASE + " 600ms";
+        squareBg.style.transform = "translate(-50%, -50%) scale(0.3)";
+        squareBg.style.opacity = "0";
 
-        // Bring letters back
-        letterSpans.forEach((span) => {
-          span.style.transition = "transform 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 1500ms cubic-bezier(0.42, 0, 0.58, 1) 300ms";
-          span.style.transform = "translateY(0)";
+        // Letters spread back to original positions
+        letterSpans.forEach(function(span) {
+          span.style.transition =
+            "transform 1500ms " + EASE + ", " +
+            "opacity 400ms " + EASE;
+          span.style.transitionDelay = "0ms";
+          span.style.transform = "translateY(0) scaleX(1) scaleY(1)";
           span.style.opacity = "1";
         });
+
+        // Restore overflow hidden after animation completes
+        setTimeout(function() {
+          if (!isMorphed) {
+            letterWrappers.forEach(function(el) {
+              el.style.overflow = "hidden";
+            });
+          }
+        }, 1600);
       }
 
-      // ── Hover events on the hover zone ──
+      // ── Hover events ──
       hoverZone.addEventListener("mouseenter", function() {
-        if (!isScrolled) morphToRect();
+        if (!isScrolled) morphToSquare();
       });
 
       hoverZone.addEventListener("mouseleave", function() {
@@ -288,13 +330,13 @@
       }, { passive: true });
 
       // Touch support
-      let touchStartY = 0;
+      var touchStartY = 0;
       window.addEventListener("touchstart", function(e) {
         touchStartY = e.touches[0].clientY;
       }, { passive: true });
 
       window.addEventListener("touchend", function(e) {
-        const deltaY = touchStartY - e.changedTouches[0].clientY;
+        var deltaY = touchStartY - e.changedTouches[0].clientY;
         if (deltaY > 50 && !isScrolled) {
           scrollToSection();
         } else if (deltaY < -50 && isScrolled) {
