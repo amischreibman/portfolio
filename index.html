@@ -45,6 +45,12 @@
       background-color: #000;
     }
 
+    /* ── Hover container ── */
+    .hover-zone {
+      position: relative;
+      cursor: default;
+    }
+
     /* ── Reveal text ── */
     .reveal-text {
       font-family: "greycliff-cf", sans-serif;
@@ -53,7 +59,8 @@
       color: #fff;
       display: flex;
       margin: 0;
-      cursor: default;
+      position: relative;
+      z-index: 2;
     }
 
     .letter {
@@ -64,9 +71,8 @@
     .letter > span {
       display: block;
       transform: translateY(100%);
-      transition-property: transform;
-      transition-duration: 1s;
-      transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+      transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1),
+                  opacity 1s cubic-bezier(0.19, 1, 0.22, 1);
     }
 
     .reveal-text.slide-in .letter > span {
@@ -81,35 +87,47 @@
     .letter:nth-child(6) > span { transition-delay: 500ms; }
     .letter:nth-child(7) > span { transition-delay: 600ms; }
 
-    /* ── Arrow morph (hover state) ── */
-    .reveal-text.arrow-morph .letter {
-      overflow: visible;
+    /* ── White rectangle (appears on hover) ── */
+    .rect-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      background: #fff;
+      border-radius: 8px;
+      transform: translate(-50%, -50%);
+      transition: width 1500ms cubic-bezier(0.42, 0, 0.58, 1),
+                  height 1500ms cubic-bezier(0.42, 0, 0.58, 1),
+                  opacity 1500ms cubic-bezier(0.42, 0, 0.58, 1);
+      opacity: 0;
+      z-index: 1;
     }
 
-    .reveal-text.arrow-morph .letter > span {
-      transition-property: transform, opacity;
-      transition-duration: 1500ms;
-      transition-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    /* ── Arrow icon (dark, inside the rectangle) ── */
+    .arrow-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 3;
+      opacity: 0;
+      transition: opacity 600ms cubic-bezier(0.42, 0, 0.58, 1);
+      pointer-events: none;
     }
 
-    /* Floating animation on the arrow formation */
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
+    .arrow-icon svg {
+      display: block;
     }
 
-    .reveal-text.arrow-morph.floating {
-      animation: float 2s ease-in-out infinite;
+    /* ── Floating animation ── */
+    @keyframes float-arrow {
+      0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+      50% { transform: translate(-50%, -50%) translateY(10px); }
     }
 
-    /* ── Scroll hint (subtle pulse on arrow) ── */
-    @keyframes pulse-opacity {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-
-    .reveal-text.arrow-morph.floating .letter > span {
-      animation: pulse-opacity 2s ease-in-out infinite;
+    .arrow-icon.floating {
+      animation: float-arrow 1.6s ease-in-out infinite;
     }
   </style>
 </head>
@@ -117,15 +135,23 @@
 
   <div class="page-wrapper">
     <section class="section-one">
-      <h1 class="reveal-text">
-        <span class="letter"><span>E</span></span>
-        <span class="letter"><span>M</span></span>
-        <span class="letter"><span>A</span></span>
-        <span class="letter"><span>N</span></span>
-        <span class="letter"><span>U</span></span>
-        <span class="letter"><span>E</span></span>
-        <span class="letter"><span>L</span></span>
-      </h1>
+      <div class="hover-zone">
+        <h1 class="reveal-text">
+          <span class="letter"><span>E</span></span>
+          <span class="letter"><span>M</span></span>
+          <span class="letter"><span>A</span></span>
+          <span class="letter"><span>N</span></span>
+          <span class="letter"><span>U</span></span>
+          <span class="letter"><span>E</span></span>
+          <span class="letter"><span>L</span></span>
+        </h1>
+        <div class="rect-bg"></div>
+        <div class="arrow-icon">
+          <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 4 L12 18 M5 13 L12 20 L19 13" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
     </section>
 
     <section class="section-two"></section>
@@ -133,112 +159,109 @@
 
   <script>
     (function() {
+      const hoverZone = document.querySelector(".hover-zone");
       const revealText = document.querySelector(".reveal-text");
-      const letters = document.querySelectorAll(".letter > span");
+      const letterEls = document.querySelectorAll(".letter");
+      const letterSpans = document.querySelectorAll(".letter > span");
+      const rectBg = document.querySelector(".rect-bg");
+      const arrowIcon = document.querySelector(".arrow-icon");
       const pageWrapper = document.querySelector(".page-wrapper");
-      let isArrow = false;
+
+      let isMorphed = false;
       let isScrolled = false;
-      let hoverTimeout = null;
+      let morphTimeout = null;
+      let arrowTimeout = null;
 
       // ── Initial slide-in ──
-      document.addEventListener("DOMContentLoaded", function() {
-        setTimeout(function() {
-          revealText.classList.add("slide-in");
-        }, 500);
-      });
+      setTimeout(function() {
+        revealText.classList.add("slide-in");
+      }, 500);
 
-      // ── Arrow shape offsets ──
-      // 7 letters arranged into a downward-pointing chevron / arrow:
-      //
-      //   E           L        (outer wings, high up)
-      //     M       E          (inner wings)
-      //       A   U            (near center)
-      //         N              (tip, lowest point)
-      //
-      function getArrowOffsets() {
-        const letterEls = document.querySelectorAll(".letter");
-        if (!letterEls.length) return [];
-
-        // Get bounding info for center calculation
+      // ── Compute center offsets for each letter ──
+      function getCenterOffsets() {
         const rects = Array.from(letterEls).map(el => el.getBoundingClientRect());
         const groupLeft = rects[0].left;
         const groupRight = rects[rects.length - 1].right;
         const groupCenterX = (groupLeft + groupRight) / 2;
-        const groupCenterY = rects[0].top + rects[0].height / 2;
 
-        // Target arrow positions (relative to each letter's current center)
-        // Arrow tip (N, index 3) is at bottom-center; wings fan out above
-        const arrowSpreadX = 160; // horizontal spread
-        const arrowDepth = 200;   // vertical depth from wing to tip
-
-        // Desired positions relative to group center:
-        //   index:  0     1     2     3     4     5     6
-        //   char:   E     M     A     N     U     E     L
-        //   col:   -3    -2    -1     0     1     2     3
-        //   row:    0     1     2     3     2     1     0
-        const cols = [-3, -2, -1, 0, 1, 2, 3];
-        const rows = [ 0,  1,  2, 3, 2, 1, 0];
-
-        return Array.from(letterEls).map((el, i) => {
-          const rect = el.getBoundingClientRect();
+        return rects.map(rect => {
           const elCenterX = rect.left + rect.width / 2;
-          const elCenterY = rect.top + rect.height / 2;
-
-          const targetX = groupCenterX + cols[i] * (arrowSpreadX / 3);
-          const targetY = groupCenterY + rows[i] * (arrowDepth / 3);
-
-          return {
-            x: targetX - elCenterX,
-            y: targetY - elCenterY
-          };
+          return groupCenterX - elCenterX;
         });
       }
 
-      // ── Morph to arrow ──
-      function morphToArrow() {
-        const offsets = getArrowOffsets();
-        if (!offsets.length) return;
+      // ── Morph: letters collapse to center → white rectangle → dark arrow ──
+      function morphToRect() {
+        if (isMorphed) return;
+        isMorphed = true;
 
-        revealText.classList.add("arrow-morph");
+        const offsets = getCenterOffsets();
 
-        letters.forEach((span, i) => {
-          span.style.transitionProperty = "transform, opacity";
-          span.style.transitionDuration = "1500ms";
-          span.style.transitionTimingFunction = "cubic-bezier(0.42, 0, 0.58, 1)";
-          span.style.transform = `translate(${offsets[i].x}px, ${offsets[i].y}px)`;
+        // Get the text bounding box for rectangle sizing
+        const textRect = revealText.getBoundingClientRect();
+        const rectWidth = textRect.height * 1.1;  // square-ish rectangle
+        const rectHeight = textRect.height * 1.1;
+
+        // Phase 1: Collapse letters to center and fade them out
+        letterSpans.forEach((span, i) => {
+          span.style.transition = "transform 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 1200ms cubic-bezier(0.42, 0, 0.58, 1)";
+          span.style.transitionDelay = "0ms";
+          span.style.transform = `translateX(${offsets[i]}px) scale(0.5)`;
+          span.style.opacity = "0";
         });
 
-        // Start floating after morph completes
-        clearTimeout(hoverTimeout);
-        hoverTimeout = setTimeout(function() {
-          revealText.classList.add("floating");
-        }, 1500);
+        // Phase 1: Grow the white rectangle
+        rectBg.style.transition = "width 1500ms cubic-bezier(0.42, 0, 0.58, 1), height 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 800ms cubic-bezier(0.42, 0, 0.58, 1)";
+        rectBg.style.width = rectWidth + "px";
+        rectBg.style.height = rectHeight + "px";
+        rectBg.style.opacity = "1";
 
-        isArrow = true;
+        // Phase 2: After rectangle forms, show the dark arrow and start floating
+        clearTimeout(arrowTimeout);
+        arrowTimeout = setTimeout(function() {
+          if (!isMorphed) return;
+          arrowIcon.style.transition = "opacity 600ms cubic-bezier(0.42, 0, 0.58, 1)";
+          arrowIcon.style.opacity = "1";
+
+          // Start floating after fade-in
+          setTimeout(function() {
+            if (!isMorphed) return;
+            arrowIcon.classList.add("floating");
+          }, 300);
+        }, 1200);
       }
 
-      // ── Morph back to text ──
+      // ── Reverse: arrow fades → rectangle shrinks → letters return ──
       function morphToText() {
-        revealText.classList.remove("floating");
-        revealText.classList.remove("arrow-morph");
+        if (!isMorphed) return;
+        isMorphed = false;
+        clearTimeout(arrowTimeout);
 
-        letters.forEach((span) => {
-          span.style.transitionProperty = "transform, opacity";
-          span.style.transitionDuration = "1500ms";
-          span.style.transitionTimingFunction = "cubic-bezier(0.42, 0, 0.58, 1)";
+        // Immediately stop floating and hide arrow
+        arrowIcon.classList.remove("floating");
+        arrowIcon.style.transition = "opacity 400ms cubic-bezier(0.42, 0, 0.58, 1)";
+        arrowIcon.style.opacity = "0";
+
+        // Shrink rectangle
+        rectBg.style.transition = "width 1500ms cubic-bezier(0.42, 0, 0.58, 1), height 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 1500ms cubic-bezier(0.42, 0, 0.58, 1)";
+        rectBg.style.width = "0";
+        rectBg.style.height = "0";
+        rectBg.style.opacity = "0";
+
+        // Bring letters back
+        letterSpans.forEach((span) => {
+          span.style.transition = "transform 1500ms cubic-bezier(0.42, 0, 0.58, 1), opacity 1500ms cubic-bezier(0.42, 0, 0.58, 1) 300ms";
           span.style.transform = "translateY(0)";
+          span.style.opacity = "1";
         });
-
-        clearTimeout(hoverTimeout);
-        isArrow = false;
       }
 
-      // ── Hover events ──
-      revealText.addEventListener("mouseenter", function() {
-        if (!isScrolled) morphToArrow();
+      // ── Hover events on the hover zone ──
+      hoverZone.addEventListener("mouseenter", function() {
+        if (!isScrolled) morphToRect();
       });
 
-      revealText.addEventListener("mouseleave", function() {
+      hoverZone.addEventListener("mouseleave", function() {
         if (!isScrolled) morphToText();
       });
 
@@ -246,7 +269,7 @@
       function scrollToSection() {
         if (isScrolled) return;
         isScrolled = true;
-        revealText.classList.remove("floating");
+        arrowIcon.classList.remove("floating");
         pageWrapper.classList.add("scrolled");
       }
 
@@ -256,7 +279,6 @@
         pageWrapper.classList.remove("scrolled");
       }
 
-      // Listen for wheel / touch to trigger the section transition
       window.addEventListener("wheel", function(e) {
         if (e.deltaY > 0 && !isScrolled) {
           scrollToSection();
@@ -280,7 +302,7 @@
         }
       }, { passive: true });
 
-      // Keyboard support (arrow down / space / page down)
+      // Keyboard support
       window.addEventListener("keydown", function(e) {
         if ((e.key === "ArrowDown" || e.key === " " || e.key === "PageDown") && !isScrolled) {
           e.preventDefault();
